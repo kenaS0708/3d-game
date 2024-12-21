@@ -1,0 +1,44 @@
+{
+    "army": {
+        "name": "🪖Армия",
+        "verify_code": "578921",
+        "rank_jobs": [
+            {
+                "name": "Собрать металл",
+                "callback_data": "start_task_metal"
+            },
+            {
+                "name": "Крафт оружия",
+                "callback_data": "start_task_craft"
+            },
+            {
+                "name": "Идти в бой",
+                "callback_data": "start_task_battle"
+            },
+            {
+                "name": "Крафт оружия",
+                "callback_data": "start_task_craft"
+            }
+        ]
+    },
+    "hospital": {
+        "name": "💊Больница",
+        "verify_code": "435889",
+        "rank_jobs": [
+            {
+                "name": "Принять пациента",
+                "callback_data": "rank_task_patient"
+            }
+        ]
+    },
+    "court": {
+        "name": "🧑‍⚖️Суд",
+        "verify_code": "662730",
+        "rank_jobs": [
+            {
+                "name": "Выиграть дело",
+                "callback_data": "rank_task_case"
+            }
+        ]
+    }
+}

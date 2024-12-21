@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Environment with Physics</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: black;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div id="instructions">
+    Нажмите, чтобы начать
+</div>
+
+<script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js';
+
+    // Основные элементы сцены
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Свет
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(5, 10, 7.5);
+    scene.add(light);
+
+    // Плоскость (пол)
+    const floorGeometry = new THREE.PlaneGeometry(200, 200);
+    const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x008000 });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
+
+    // Куб
+    const cubeGeometry = new THREE.BoxGeometry(2, 2, 2);
+    const cubeMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+    const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+    cube.position.set(5, 1, 5);
+    scene.add(cube);
+
+    // Оболочка для управления камерой
+    const cameraWrapper = new THREE.Object3D();
+    cameraWrapper.add(camera);
+    scene.add(cameraWrapper);
+
+    // Переменные для управления
+    const speed = 5; // Скорость передвижения
+    const gravity = 9.8; // Гравитация
+    const jumpStrength = 5; // Сила прыжка
+    const movement = { forward: false, backward: false, left: false, right: false };
+    let velocityY = 0; // Вертикальная скорость
+    const playerHeight = 1.5;
+    let isGrounded = true;
+
+    // Позиция камеры
+    camera.position.set(0, playerHeight, 0);
+
+    // Управление движением
+    function moveCamera(deltaTime) {
+        const direction = new THREE.Vector3();
+        const forward = new THREE.Vector3();
+        const right = new THREE.Vector3();
+
+        // Направления движения
+        cameraWrapper.getWorldDirection(forward); // Получаем направление камеры
+        forward.y = 0; // Игнорируем вертикальный наклон камеры
+        forward.normalize();
+
+        right.copy(forward).cross(new THREE.Vector3(0, 1, 0)).normalize(); // Перпендикулярное направление
+
+        // Добавляем или вычитаем векторы для правильного направления
+        if (movement.forward) direction.sub(forward); // Движение вперед (инвертировано)
+        if (movement.backward) direction.add(forward); // Движение назад
+        if (movement.left) direction.sub(right); // Движение влево
+        if (movement.right) direction.add(right); // Движение вправо
+
+        // Применяем движение
+        direction.normalize().multiplyScalar(speed * deltaTime);
+
+        // Проверка на столкновение с кубом
+        const nextPosition = cameraWrapper.position.clone().add(direction);
+        const cubeBounds = new THREE.Box3().setFromObject(cube);
+        const playerBounds = new THREE.Box3().setFromCenterAndSize(
+            nextPosition,
+            new THREE.Vector3(1, playerHeight, 1) // Размер игрока
+        );
+
+        if (cubeBounds.intersectsBox(playerBounds)) {
+            // Ограничение движения при столкновении
+            const collisionNormal = nextPosition.clone().sub(cube.position).normalize();
+            collisionNormal.y = 0; // Игнорируем вертикальный компонент
+            direction.sub(collisionNormal.multiplyScalar(direction.dot(collisionNormal)));
+        }
+
+        cameraWrapper.position.add(direction);
+
+        // Гравитация
+        if (!isGrounded) velocityY -= gravity * deltaTime;
+        cameraWrapper.position.y += velocityY * deltaTime;
+
+        // Ограничение по полу
+        if (cameraWrapper.position.y <= playerHeight) {
+            cameraWrapper.position.y = playerHeight;
+            velocityY = 0;
+            isGrounded = true;
+        }
+    }
+
+    // Управление клавишами
+    document.addEventListener('keydown', (event) => {
+        switch (event.code) {
+            case 'KeyW': movement.forward = true; break;
+            case 'KeyS': movement.backward = true; break;
+            case 'KeyA': movement.left = true; break;
+            case 'KeyD': movement.right = true; break;
+            case 'Space':
+                if (isGrounded) {
+                    velocityY = jumpStrength;
+                    isGrounded = false;
+                }
+                break;
+        }
+    });
+
+    document.addEventListener('keyup', (event) => {
+        switch (event.code) {
+            case 'KeyW': movement.forward = false; break;
+            case 'KeyS': movement.backward = false; break;
+            case 'KeyA': movement.left = false; break;
+            case 'KeyD': movement.right = false; break;
+        }
+    });
+
+    // Блокировка мыши
+    const instructions = document.getElementById('instructions');
+    instructions.addEventListener('click', () => {
+        document.body.requestPointerLock();
+    });
+
+    document.addEventListener('pointerlockchange', () => {
+        if (document.pointerLockElement === document.body) {
+            instructions.style.display = 'none';
+            document.addEventListener('mousemove', onMouseMove, false);
+        } else {
+            instructions.style.display = '';
+            document.removeEventListener('mousemove', onMouseMove, false);
+        }
+    });
+
+    // Управление камерой мышью
+    let pitch = 0; // Угол наклона вверх/вниз
+    let yaw = 0;   // Угол поворота влево/вправо
+
+    function onMouseMove(event) {
+        const sensitivity = 0.002; // Чувствительность мыши
+        const movementX = event.movementX || 0;
+        const movementY = event.movementY || 0;
+
+        // Обновляем углы поворота
+        yaw -= movementX * sensitivity; // Влево/вправо
+        pitch -= movementY * sensitivity; // Вверх/вниз
+
+        // Ограничиваем угол наклона вверх/вниз (от -90° до 90°)
+        const maxPitch = Math.PI / 2; // 90°
+        pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
+
+        // Устанавливаем повороты
+        cameraWrapper.rotation.y = yaw; // Влево/вправо
+        camera.rotation.x = pitch; // Вверх/вниз
+    }
+
+    // Анимация
+    let previousTime = performance.now();
+    function animate() {
+        const currentTime = performance.now();
+        const deltaTime = (currentTime - previousTime) / 1000; // Время между кадрами в секундах
+        previousTime = currentTime;
+
+        moveCamera(deltaTime);
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+    }
+    animate();
+</script>
+</body>
+</html>
